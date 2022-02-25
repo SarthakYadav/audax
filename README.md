@@ -81,10 +81,11 @@ Two popular learnable feature extraction frontends are available in [audax.front
 Sample recipes, as well as pretrained models ([AudioSet](https://research.google.com/audioset/) for now) can be found in the [recipes/leaf](recipes/leaf).
 
 ### Self-supervised models
-- Pretrained `COLA` [6] models on AudioSet for various aforementioned architectures can be found in [recipes/cola](recipes/cola). 
+- `COLA` [6] models on AudioSet for various aforementioned architectures can be found in [recipes/cola](recipes/cola). 
 - A working implementation of `SimCLR` [7, 8] can be found in [recipes/simclr](recipes/simclr), and pretrained models will be added soon (experiments ongoing!).
 
 ## What's coming up
+- Pretrained `COLA` models and linear probe experiments. (VERY SOON!)
 - Better documentation and walk-throughs.
 - Pretrained `SimCLR` models.
 - Recipes for Speaker Recognition on [VoxCeleb](https://www.robots.ox.ac.uk/~vgg/data/voxceleb/)
