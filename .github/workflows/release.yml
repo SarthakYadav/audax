@@ -1,0 +1,37 @@
+name: Release
+on:
+  push:
+    tags:
+      - "*"
+jobs:
+  release-pypi:
+    name: release-pypi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
+      - name: Upgrade pip
+        run: pip install pip --upgrade
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install .
+      - name: Build for distribution
+        run: python setup.py sdist bdist_wheel
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: "${{ secrets.PYPI_API_TOKEN }}"
+      - name: Create Release
+        uses: actions/create-release@main
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        with:
+          tag_name: "${{ github.ref }}"
+          release_name: "v${{ github.ref }}"
+          draft: true
+          prerelease: false
