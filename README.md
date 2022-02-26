@@ -2,7 +2,6 @@
 - [Sponsors](#sponsors)
 - [About](#about)
 - [Installation](#installation)
-  - [Requirements](#requirements)
 - [Data pipeline](#data-pipeline)
 - [What's available](#whats-available)
   - [Audio feature extraction](#audio-feature-extraction)
@@ -27,20 +26,16 @@ Expect changes, restructuring, and like the official Jax repository itself says,
 
 ## Installation
 
-### Requirements
-```
-jax
-flax>=0.4.0
-optax==0.1.1
-tensorflow>=2.7.0
-tensorflow-datasets
-tensorflow-io   # for audio decoding
+```shell
+pip install audax
 ```
 
-After installing prerequisites, to install audax
+To install from the latest source use following command
+
 ```shell
 git clone https://github.com/SarthakYadav/audax.git
 cd audax
+pip install -r requirements.txt
 pip install .
 ```
 
@@ -91,7 +86,6 @@ Sample recipes, as well as pretrained models ([AudioSet](https://research.google
 - Recipes for Speaker Recognition on [VoxCeleb](https://www.robots.ox.ac.uk/~vgg/data/voxceleb/)
 - More `AudioSet` pretrained checkpoints for architectures already added.
 - Reference implementations for more neural architectures, esp. Transformer based networks.
-- PyPi release (soon!)
 
 ## On contributing
 - At the time of writing, I've been the sole person involved in development of this work, and quite frankly, would love to have help!
