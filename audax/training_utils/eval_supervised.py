@@ -30,6 +30,7 @@ import tensorflow as tf
 from sklearn.metrics import average_precision_score, accuracy_score
 from ..transforms import mixup
 from . import metrics_helper
+from .trainstate import TrainState_v2
 from jax.config import config
 
 
@@ -61,13 +62,35 @@ def forward(state, batch):
     return logits
 
 
-def load_variables_from_checkpoint(workdir, prefix):
-    pretrained_variables = checkpoints.restore_checkpoint(workdir, None, prefix=prefix)
-    variables = {
-        "params": pretrained_variables['params'],
-        "batch_stats": pretrained_variables['batch_stats']
-    }
-    return variables, pretrained_variables['aux_rng_keys']
+def load_pretrained(rng, config, model, learning_rate_fn, workdir, prefix):
+    dynamic_scale = None
+    platform = jax.local_devices()[0].platform
+    if config.half_precision and platform == 'gpu':
+        dynamic_scale = optim.DynamicScale()
+    else:
+        dynamic_scale = None
+    params, batch_stats, rng_keys = training_utilities.initialize(rng, config.input_shape, model)
+
+    pretrained_state_dict = checkpoints.restore_checkpoint(workdir, None, prefix=prefix)
+
+    pretrained_params = pretrained_state_dict['params']
+    pretrained_frozen_params = pretrained_state_dict['frozen_params']
+    pretrained_batch_stats = pretrained_state_dict['batch_stats']
+
+    tx = optax.adamw(
+        learning_rate=learning_rate_fn,
+        weight_decay=config.opt.weight_decay
+    )
+    state = TrainState_v2.create(
+        apply_fn=model.apply,
+        params=pretrained_params,
+        frozen_params=pretrained_frozen_params,
+        tx=tx,
+        batch_stats=pretrained_batch_stats,
+        aux_rng_keys=rng_keys,
+        dynamic_scale=dynamic_scale)
+
+    return state
 
 
 def evaluate(workdir: str,
@@ -127,7 +150,7 @@ def evaluate(workdir: str,
         if len(tfs) != 0:
             p_feature_extract_fn = jax.pmap(
                 functools.partial(
-                    training_utilities.apply_audio_transforms, transforms=tfs, 
+                    training_utilities.apply_audio_transforms, transforms=tfs,
                     dtype=training_utilities.get_dtype(config.half_precision),
                 ), axis_name='batch', devices=devices)
         else:
@@ -141,13 +164,12 @@ def evaluate(workdir: str,
         num_classes=config.model.num_classes,
         spec_aug=None,
         drop_rate=config.model.get("fc_drop_rate", 0.))
-    
+
     # placeholder to just load the thing
     learning_rate_fn = training_utilities.create_learning_rate_fn(
         config, 0.1, 100)
-    state = training_utilities.create_train_state(rng, config, model, learning_rate_fn)
-    # state = training_utilities.restore_checkpoint(state, workdir)
-    state = checkpoints.restore_checkpoint(workdir, state, prefix="best_")
+    
+    state = load_pretrained(rng, config, model, learning_rate_fn, workdir, prefix="best_")
     state = jax_utils.replicate(state, devices=devices)
     p_forward = jax.pmap(functools.partial(forward),
                            axis_name='batch', devices=devices)
