@@ -52,10 +52,13 @@ python main.py --config configs/supervised/speechcommandsv2/convnext_tiny_sc_ft.
 
 ## Models and their performance
 
-| Architecture   | features                                | SpecAugment   | linear probe<br>(SpeechCommands-v2) | Pretrained weights                                                                                                                                                                                                           |
-|----------------|-----------------------------------------|---------------|-------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| ConvNeXT-Tiny  | melspectrograms<br>(64 nmels, 1024-fft) | positive only | 0.710                               | [COLA weights](https://drive.google.com/drive/folders/1Pul5XcAv1OWIFYx00dtrgCWgQ_km-u5i?usp=sharing) <br/> [SpeechCommands-v2 weights](https://drive.google.com/drive/folders/1CdUpQCXcS4fQ4MsZwsekNe6hXR_LEjkD?usp=sharing) |
-| ConvNeXT-Large | melspectrograms<br>(64 nmels, 1024-fft) | positive only | 0.7159                              | [COLA weights](https://drive.google.com/drive/folders/1632ExyoC9xK_EczdoP7haV01oFLMJpxf?usp=sharing) <br/>[SpeechCommands-v2 weights](https://drive.google.com/drive/folders/1mvGTccHl_ZSLNJUVzNwQ7Zqyhkb97dL_?usp=sharing)                |
+| Architecture    | features                                               | SpecAugment   | linear probe<br>(SpeechCommands-v2) | Pretrained weights                                                                                                                                                                                                           |
+|-----------------|--------------------------------------------------------|---------------|-------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| EfficientNet-b0 | melspectrograms<br>(64 nmels, 1024-fft)<br/>normalized | positive only | 0.590±0.026                         | [COLA weights](https://drive.google.com/drive/folders/1sDJ0XO8-OxzFpdH8kF_zr6aFNgMXSIvB?usp=sharing) <br/> [SpeechCommands-v2 weights](https://drive.google.com/drive/folders/1O-D6CC_wLPHr34yPmml4nmr0DhV6sAha?usp=sharing) |
+| ConvNeXT-Tiny   | melspectrograms<br>(64 nmels, 1024-fft)                | positive only | 0.710                               | [COLA weights](https://drive.google.com/drive/folders/1Pul5XcAv1OWIFYx00dtrgCWgQ_km-u5i?usp=sharing) <br/> [SpeechCommands-v2 weights](https://drive.google.com/drive/folders/1CdUpQCXcS4fQ4MsZwsekNe6hXR_LEjkD?usp=sharing) |
+| ConvNeXT-Large  | melspectrograms<br>(64 nmels, 1024-fft)                | positive only | 0.7159                              | [COLA weights](https://drive.google.com/drive/folders/1632ExyoC9xK_EczdoP7haV01oFLMJpxf?usp=sharing) <br/> [SpeechCommands-v2 weights](https://drive.google.com/drive/folders/1mvGTccHl_ZSLNJUVzNwQ7Zqyhkb97dL_?usp=sharing) |
+
+- The performance of EfficientNet-b0 in the paper [1] on SpeechCommands-v2 is ~0.62, so we're close, although EfficientNet-b0 needed a lot of hyperparam nitpicking to get here.
 
 ## Up next
 - Evaluation on more models and configurations, repeated runs.

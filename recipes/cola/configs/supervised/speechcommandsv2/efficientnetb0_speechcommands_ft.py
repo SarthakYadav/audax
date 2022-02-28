@@ -8,7 +8,7 @@ def get_config():
     config.model.arch = "efficientnet_b0"
     config.model.type = "multiclass"
     config.model.num_classes = 35
-    config.model.pretrained = "/home/sarthak/jax_exps/audax/cola/ssl/efficientnet-b0_1x1024_wd1e-7_100eps"
+    config.model.pretrained = "/home/sarthak/jax_exps/audax/cola/ssl/efficientnetb0_8x256_lr1e-3_wd0.005_bilinear_50eps_nospecaug_specfix_normalization"
     config.model.pretrained_prefix = "checkpoint_"
     config.model.pretrained_fc_only = True
 
@@ -47,9 +47,10 @@ def get_config():
     config.data.reader = "tfio"
     config.data.cacheable = False
     config.data.jax_transforms = True
+    config.data.normalize_batch = True
     config.data.dataset_name = "speechcommandsv2"
 
-    config.batch_size = 1024
+    config.batch_size = 512
     config.half_precision = True
     config.input_shape = (101, 64, 1)
     config.num_epochs = 50

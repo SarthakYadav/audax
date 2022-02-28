@@ -13,7 +13,7 @@ def get_config():
 
     config.opt = ml_collections.ConfigDict()
     config.opt.optimizer = "Adamw"
-    config.opt.learning_rate = 5e-4
+    config.opt.learning_rate = 5e-5
     config.opt.weight_decay = 1e-6
     config.opt.schedule = "cosine"
     config.opt.warmup_epochs = 5.0
@@ -52,6 +52,7 @@ def get_config():
     config.data.reader = "tfio"
     config.data.cacheable = False
     config.data.jax_transforms = True
+    config.data.normalize_batch = True
     config.data.dataset_name = "audioset"
 
     config.batch_size = 8*256
@@ -59,7 +60,7 @@ def get_config():
     config.input_shape = (100, 64, 1)
     config.num_epochs = 50
     config.device = None
-    
+
     config.wandb = ml_collections.ConfigDict()
     config.wandb.project = "cola"
 

@@ -187,6 +187,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
                 functools.partial(
                     training_utilities.apply_audio_transforms, transforms=tfs, 
                     dtype=training_utilities.get_dtype(config.half_precision),
+                    normalize=config.data.get("normalize_batch", False)
                 ), axis_name='batch', devices=devices)
         else:
             p_feature_extract_fn = None

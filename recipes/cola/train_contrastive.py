@@ -27,6 +27,7 @@ References
 
 import time
 import jax
+import flax
 import wandb
 import functools
 import ml_collections
@@ -66,7 +67,7 @@ def create_COLA_model(*, encoder_cls, half_precision, similarity_measure, embedd
     else:
         model_dtype = jnp.float32
     return COLA(model_cls=encoder_cls, similarity_measure=similarity_measure,
-                embedding_dim=embedding_dim, temperature=temperature, spec_aug=spec_aug, 
+                embedding_dim=embedding_dim, temperature=temperature, spec_aug=spec_aug,
                 dtype=model_dtype, **kwargs)
 
 
@@ -123,11 +124,13 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
                 functools.partial(
                     training_utilities.apply_audio_transforms, transforms=tfs,
                     dtype=training_utilities.get_dtype(config.half_precision),
+                    normalize=config.data.get("normalize_batch", False)
                 ), axis_name='batch', devices=devices)
         else:
             p_feature_extract_fn = None
     else:
         p_feature_extract_fn = None
+    logging.info("feature fn created with normalize: {}".format(config.data.get("normalize_batch", False)))
     in_model_spec_aug = config.get("in_model_spec_aug", False)
     p_spec_aug, spec_aug_rng = training_utilities.get_spec_augment(config, devices, pmapped=not in_model_spec_aug)
     if p_spec_aug:

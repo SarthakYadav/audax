@@ -264,13 +264,18 @@ def create_input_iter(ds, devices=None):
 
 
 def apply_audio_transforms(batch, transforms=[],
-                           dtype=jnp.float32):
+                           dtype=jnp.float32, normalize=False):
     output = batch
     for tfs in transforms:
         output = tfs(output)
     output = jnp.clip(output, a_min=1e-8, a_max=1e8)
     if len(transforms) != 0:
         output = jnp.log(output)
+    if normalize:
+        print("!!!!!!!!!!!!!!!!!!!!!! NORMALIZING INPUTS !!!!!!!!!!!!!!!!!!!!!!!!")
+        mu = output.mean(axis=(1, 2), keepdims=True)
+        std = output.std(axis=(1, 2), keepdims=True)
+        output = (output - mu)/(std+1e-7)
     output = output[Ellipsis, jnp.newaxis]
     # output = output.transpose((0, 2, 1, 3))
     output = output.astype(dtype)

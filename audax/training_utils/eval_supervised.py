@@ -152,6 +152,7 @@ def evaluate(workdir: str,
                 functools.partial(
                     training_utilities.apply_audio_transforms, transforms=tfs,
                     dtype=training_utilities.get_dtype(config.half_precision),
+                    normalize=config.data.get("normalize_batch", False)
                 ), axis_name='batch', devices=devices)
         else:
             p_feature_extract_fn = None
@@ -168,7 +169,8 @@ def evaluate(workdir: str,
     # placeholder to just load the thing
     learning_rate_fn = training_utilities.create_learning_rate_fn(
         config, 0.1, 100)
-    
+    # state = training_utilities.create_train_state(rng, config, model, learning_rate_fn)
+    # state = checkpoints.restore_checkpoint(workdir, state, prefix="best_")
     state = load_pretrained(rng, config, model, learning_rate_fn, workdir, prefix="best_")
     state = jax_utils.replicate(state, devices=devices)
     p_forward = jax.pmap(functools.partial(forward),
