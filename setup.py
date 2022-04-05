@@ -23,5 +23,5 @@ setuptools.setup(
         "audax.training_utils",
         "audax.training_utils.data_v2",
     ],
-    python_requires=">=3.8"
+    python_requires=">=3.7"
 )
