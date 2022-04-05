@@ -39,6 +39,8 @@ pip install -r requirements.txt
 pip install .
 ```
 
+A colab installation walkthrough can be found [here](https://colab.research.google.com/drive/1smq-oaqyPd2G-aglqwdhrbYBZEX-r0Vd?usp=sharing)
+
 ## Data pipeline
 
 - All training is done on custom TFRecords. Initially tried using [tensorflow-datasets](https://www.tensorflow.org/datasets/api_docs/python/tfds), but decided against it.
