@@ -6,8 +6,11 @@ Written for audax by / Copyright 2022, Sarthak Yadav
 import json
 import functools
 import os
+import math
 import time
 from typing import Any
+
+# from torch import strided
 import tqdm
 from absl import logging
 from clu import metric_writers
@@ -32,6 +35,7 @@ from ..transforms import mixup
 from . import metrics_helper
 from .trainstate import TrainState_v2
 from jax.config import config
+from audax.core.helpers import batch_pad
 
 
 try:
@@ -58,8 +62,18 @@ def forward(state, batch):
         'batch_stats': state.batch_stats
     }
     logits = state.apply_fn(
-        variables, batch['audio'], train=False, mutable=False)
+        variables, batch, train=False, mutable=False)
     return logits
+
+
+def pad_data(batch, per_seg_length=16000, sr=16000):
+    waveform = batch[0][0]
+    seg_length = int(math.ceil(waveform.shape[0] / sr) * sr)
+    padding = jnp.maximum(seg_length - waveform.shape[0], 0)
+    left_pad = padding // 2
+    right_pad = padding - left_pad
+    waveform = jnp.pad(waveform, [(left_pad, right_pad)], mode="reflect")
+    return waveform.reshape(-1, 1, per_seg_length)
 
 
 def load_pretrained(rng, config, model, learning_rate_fn, workdir, prefix):
@@ -70,13 +84,13 @@ def load_pretrained(rng, config, model, learning_rate_fn, workdir, prefix):
     else:
         dynamic_scale = None
     params, batch_stats, rng_keys = training_utilities.initialize(rng, config.input_shape, model)
-
+    
     pretrained_state_dict = checkpoints.restore_checkpoint(workdir, None, prefix=prefix)
 
     pretrained_params = pretrained_state_dict['params']
     pretrained_frozen_params = pretrained_state_dict['frozen_params']
     pretrained_batch_stats = pretrained_state_dict['batch_stats']
-
+    
     tx = optax.adamw(
         learning_rate=learning_rate_fn,
         weight_decay=config.opt.weight_decay
@@ -89,14 +103,15 @@ def load_pretrained(rng, config, model, learning_rate_fn, workdir, prefix):
         batch_stats=pretrained_batch_stats,
         aux_rng_keys=rng_keys,
         dynamic_scale=dynamic_scale)
-
+    
     return state
 
 
 def evaluate(workdir: str,
              eval_signal_duration="AUTO",
              eval_manifest_override=None,
-             eval_steps_override=None):
+             eval_steps_override=None,
+             strided_eval=False):
     config = training_utilities.read_config_from_json(workdir)
     if config.batch_size % jax.device_count() > 0:
         raise ValueError('Batch size must be divisible by the number of devices')
@@ -105,10 +120,10 @@ def evaluate(workdir: str,
     logging.info("Process count: {}".format(jax.process_count()))
     # eval is done on single device
     device = config.get("device", 1)
-    if device:
-        devices = [jax.local_devices()[device]]
-    else:
-        devices = jax.local_devices()
+    # if device:
+    #     devices = [jax.local_devices()[device]]
+    # else:
+    devices = [jax.local_devices()[1]]
     platform = devices[0].platform
     if config.half_precision:
         if platform == 'tpu':
@@ -118,19 +133,28 @@ def evaluate(workdir: str,
     else:
         input_dtype = tf.float32
     mode = TrainingMode(config.model.type)
-    if eval_signal_duration == "AUTO":
-        if config.data.dataset_name == "audioset":
-            config.audio_config.min_duration = 10.
-        elif config.data.dataset_name == "speechcommandsv2":
-            config.audio_config.min_duration = 1.
-        elif config.data.dataset_name == "voxceleb1":
-            config.audio_config.min_duration = 10.
+    if strided_eval:
+        strided_eval_samples = int(config.audio_config.min_duration * config.audio_config.sample_rate)
+        logging.info("Evaluating with nonoverlapping patches of len {} samples each".format(strided_eval_samples))
+    else:
+        if eval_signal_duration == "AUTO" and not strided_eval:
+            if config.data.dataset_name == "audioset":
+                config.audio_config.min_duration = 10.
+            elif config.data.dataset_name == "speechcommandsv2":
+                config.audio_config.min_duration = 1.
+            elif config.data.dataset_name == "voxceleb1":
+                config.audio_config.min_duration = 10.
+            elif config.data.dataset_name == "nsynth":
+                config.audio_config.min_duration = 4.
+            elif config.data.dataset_name == "tut2018":
+                config.audio_config.min_duration = 10.
+            else:
+                raise ValueError(f"Unsupported dataset {config.data.dataset_name} for eval_signal_duration == 'AUTO'")
+            logging.info("Evaluating on padded sequences of {} sec each".format(config.audio_config.min_duration))
+        elif type(eval_signal_duration) == float and eval_signal_duration >= 1.0:
+            config.audio_config.min_duration = eval_signal_duration
         else:
             raise ValueError(f"Unsupported dataset {config.data.dataset_name} for eval_signal_duration == 'AUTO'")
-    elif type(eval_signal_duration) == float and eval_signal_duration >= 1.0:
-        config.audio_config.min_duration = eval_signal_duration
-    else:
-        raise ValueError(f"Unsupported dataset {config.data.dataset_name} for eval_signal_duration == 'AUTO'")
     if eval_manifest_override is not None:
         assert os.path.exists(eval_manifest_override), f"{eval_manifest_override} doesn't exist"
         logging.info("Overriding eval_manifest path {} in config file with {}".format(
@@ -150,7 +174,7 @@ def evaluate(workdir: str,
         if len(tfs) != 0:
             p_feature_extract_fn = jax.pmap(
                 functools.partial(
-                    training_utilities.apply_audio_transforms, transforms=tfs,
+                    training_utilities.apply_audio_transforms, transforms=tfs, 
                     dtype=training_utilities.get_dtype(config.half_precision),
                     normalize=config.data.get("normalize_batch", False)
                 ), axis_name='batch', devices=devices)
@@ -165,7 +189,7 @@ def evaluate(workdir: str,
         num_classes=config.model.num_classes,
         spec_aug=None,
         drop_rate=config.model.get("fc_drop_rate", 0.))
-
+    
     # placeholder to just load the thing
     learning_rate_fn = training_utilities.create_learning_rate_fn(
         config, 0.1, 100)
@@ -182,15 +206,32 @@ def evaluate(workdir: str,
         steps_per_eval = config.steps_per_eval
     eval_logits = []
     eval_labels = []
-    for _ in tqdm.tqdm(range(steps_per_eval)):
+
+    data = []
+    indices = []
+
+    for idx in tqdm.tqdm(range(steps_per_eval)):
         eval_batch = next(eval_iter)
-        if p_feature_extract_fn:
-            eval_batch['audio'] = p_feature_extract_fn(eval_batch['audio'])
-        # print(eval_batch['audio'].shape)
-        logits = p_forward(state, eval_batch)
-        # print(logits.shape)
-        eval_logits.append(logits)
         eval_labels.append(eval_batch['label'])
+        if strided_eval:
+            padded_batch = pad_data(eval_batch['audio'], 
+                                    per_seg_length=strided_eval_samples,
+                                    sr=config.audio_config.sample_rate)
+        else:
+            padded_batch = eval_batch['audio']
+        preds = []
+        for jx in range(len(padded_batch)):
+            rec = padded_batch[jx][jnp.newaxis, Ellipsis]
+            if p_feature_extract_fn:
+                rec = p_feature_extract_fn(rec)
+            logits = p_forward(state, rec).squeeze()
+            preds.append(logits.squeeze())
+        preds = jnp.array(preds)
+        preds = jnp.mean(preds, 0, keepdims=True)
+        eval_logits.append(preds)
+
+    print("eval_logits:", len(eval_logits))
+    print("eval_labels:", len(eval_labels))
     logging.info("Concatenating predictions and labels..")
     eval_logits = jnp.concatenate([jax.device_get(x) for x in eval_logits])
     eval_labels = jnp.concatenate([jax.device_get(x) for x in eval_labels])

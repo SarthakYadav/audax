@@ -98,12 +98,15 @@ def sync_batch_stats(state):
 def create_learning_rate_fn(
         config: ml_collections.ConfigDict,
         base_learning_rate: float,
-        steps_per_epoch: int):
+        steps_per_epoch: int,
+        num_epochs: int=None):
     """Create learning rate schedule."""
     warmup_fn = optax.linear_schedule(
         init_value=0., end_value=base_learning_rate,
         transition_steps=config.opt.warmup_epochs * steps_per_epoch)
-    cosine_epochs = max(config.num_epochs - config.opt.warmup_epochs, 1)
+    if num_epochs is None:
+        num_epochs = config.num_epochs
+    cosine_epochs = max(num_epochs - config.opt.warmup_epochs, 1)
     cosine_fn = optax.cosine_decay_schedule(
         init_value=base_learning_rate,
         decay_steps=cosine_epochs * steps_per_epoch)
@@ -264,7 +267,8 @@ def create_input_iter(ds, devices=None):
 
 
 def apply_audio_transforms(batch, transforms=[],
-                           dtype=jnp.float32, normalize=False):
+                           dtype=jnp.float32, normalize=False,
+                           add_new_axis=True):
     output = batch
     for tfs in transforms:
         output = tfs(output)
@@ -276,7 +280,8 @@ def apply_audio_transforms(batch, transforms=[],
         mu = output.mean(axis=(1, 2), keepdims=True)
         std = output.std(axis=(1, 2), keepdims=True)
         output = (output - mu)/(std+1e-7)
-    output = output[Ellipsis, jnp.newaxis]
+    if add_new_axis:
+        output = output[Ellipsis, jnp.newaxis]
     # output = output.transpose((0, 2, 1, 3))
     output = output.astype(dtype)
     return output

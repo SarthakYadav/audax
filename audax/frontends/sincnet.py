@@ -86,8 +86,34 @@ class SincInit:
         high_hz = 0.5 * self._sample_rate - (low_hz + self._min_band_hz)
         low_mel = utils.hz2mel(low_hz)
         high_mel = utils.hz2mel(high_hz)
-        bandpass_mel = jnp.linspace(low_mel, high_mel, filters + 1)
-        bandpass_hz = utils.mel2hz(bandpass_mel)
+
+        if self._sampling == "uniform":
+            bandpass_mel = jax.random.uniform(key, (filters+1,), dtype=dtype, 
+                                             minval=low_mel, maxval=high_mel)
+            bandpass_mel = bandpass_mel.sort()
+            bandpass_hz = utils.mel2hz(bandpass_mel)
+        elif self._sampling == "truncated_normal":
+            # sample from truncated normal between zero and one
+            # multiply by high_mel
+            bandpass_mel = jax.random.truncated_normal(key, 0., 1., (filters+1,), dtype=dtype)
+            # a simple min max scale
+            bandpass_mel_std = (bandpass_mel - bandpass_mel.min(axis=0)) / (bandpass_mel.max(axis=0) - bandpass_mel.min(axis=0))
+            bandpass_mel = bandpass_mel_std * (high_mel - low_mel) + low_mel
+            bandpass_mel = bandpass_mel.sort()
+            bandpass_hz = utils.mel2hz(bandpass_mel)
+        elif self._sampling == "uniform_v2":
+            bandpass_hz = jax.random.uniform(key, (filters+1,), dtype=dtype,
+                                            minval=low_hz, maxval=high_hz)
+            bandpass_hz = bandpass_hz.sort()
+        elif self._sampling == "truncated_normal_v2":
+            bandpass_hz = jax.random.truncated_normal(key, 0., 1., (filters+1,), dtype=dtype)
+            bandpass_hz_std = (bandpass_hz - bandpass_hz.min(axis=0)) / (bandpass_hz.max(axis=0) - bandpass_hz.min(axis=0))
+            bandpass_hz = bandpass_hz_std * (high_hz - low_hz) + low_hz
+            bandpass_hz = bandpass_hz.sort()
+        else:
+            bandpass_mel = jnp.linspace(low_mel, high_mel, filters + 1)
+            bandpass_hz = utils.mel2hz(bandpass_mel)
+
         left_edge = bandpass_hz[:-1]
         filter_width = bandpass_hz[1:] - bandpass_hz[:-1]
         return jnp.stack([left_edge, filter_width], axis=1).astype(dtype)

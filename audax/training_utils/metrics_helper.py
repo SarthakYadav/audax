@@ -3,7 +3,7 @@
 # Modifications and additions for audax by / Copyright 2022, Sarthak Yadav
 
 import csv
-import torch
+
 from sklearn.metrics import average_precision_score
 from scipy import stats
 from sklearn import metrics
@@ -86,6 +86,7 @@ def mean_confidence_interval(data, confidence=0.95):
 
 
 def calculate_mAP(preds, gts, mixup=False, mode="macro"):
+    import torch
     preds = torch.cat(preds, 0).numpy()
     gts = torch.cat(gts, 0).numpy()
     if mixup:

@@ -14,7 +14,10 @@ from ..misc import DataSplit, TrainingMode, Features
 def get_tfrecord_parser(config: ml_collections.ConfigDict, cropper,
                         label_parser_func, is_val=False,
                         is_contrastive=False):
-    desired_seq_len = int(config.audio_config.sample_rate * config.audio_config.min_duration)
+    if config.audio_config.min_duration is not None:
+        desired_seq_len = int(config.audio_config.sample_rate * config.audio_config.min_duration)
+    else:
+        desired_seq_len = int(config.audio_config.sample_rate * 10.)
     if is_contrastive and config.data.reader != "tfio":
         raise NotImplementedError("Only tfio data reader supports contrastive data parsing." +
                                   "Provided config.data.reader == {}".format(config.data.reader))
@@ -26,13 +29,17 @@ def get_tfrecord_parser(config: ml_collections.ConfigDict, cropper,
                                           cropper=cropper,
                                           noise=config.model.get("contrastive_noise", 0.001),
                                           normalize_waveform=config.audio_config.get("normalize_waveform", False),
-                                          seg_length=desired_seq_len * 2)
+                                          normalize_loudness=config.audio_config.get("normalize_loudness", False),
+                                          seg_length=desired_seq_len * 2,
+                                          file_format=config.data.get("file_format","flac"))
         else:
             parser_fn = functools.partial(dataset.parse_tfrecord_fn_tfio,
                                           label_parser=label_parser_func,
                                           cropper=cropper,
                                           normalize_waveform=config.audio_config.get("normalize_waveform", False),
-                                          seg_length=desired_seq_len)
+                                          normalize_loudness=config.audio_config.get("normalize_loudness", False),
+                                          seg_length=desired_seq_len,
+                                          file_format=config.data.get("file_format","flac"))
     else:
         parser_fn = functools.partial(dataset.parse_tfrecord_fn_v2,
                                       label_parser=label_parser_func,
@@ -45,13 +52,18 @@ def prepare_datasets_v2(config: ml_collections.ConfigDict, batch_size, input_dty
     train_files = pd.read_csv(config.data.tr_manifest)['files'].values
     val_files = pd.read_csv(config.data.eval_manifest)['files'].values
 
-    desired_seq_len = int(config.audio_config.sample_rate * config.audio_config.min_duration)
+    if config.audio_config.min_duration is not None:
+        desired_seq_len = int(config.audio_config.sample_rate * config.audio_config.min_duration)
+        random_cropper = functools.partial(transforms.random_crop_signal, slice_length=desired_seq_len)
+        center_cropper = functools.partial(transforms.center_crop_signal, slice_length=desired_seq_len)
+    else:
+        desired_seq_len = int(config.audio_config.sample_rate * 10.)
+        random_cropper = None
+        center_cropper = None
 
     label_parser_func = functools.partial(transforms.label_parser, mode=config.model.type,
                                           num_classes=config.model.num_classes)
 
-    random_cropper = functools.partial(transforms.random_crop_signal, slice_length=desired_seq_len)
-    center_cropper = functools.partial(transforms.center_crop_signal, slice_length=desired_seq_len)
 
     if config.model.type.lower() in ["contrastive", "cola"]:
         is_contrastive = True

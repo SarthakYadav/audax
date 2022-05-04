@@ -9,7 +9,7 @@ import tensorflow_io as tfio
 from typing import Callable, Optional
 from functools import partial
 from ..misc import TrainingMode, DataSplit
-from .transforms import pad_waveform, contrastive_labels
+from .transforms import pad_waveform, contrastive_labels, loudness_normalization
 
 
 def parse_tfrecord_fn_v2(example,
@@ -37,16 +37,26 @@ def parse_tfrecord_fn_tfio(example,
                            label_parser=None,
                            cropper=None,
                            normalize_waveform=False,
-                           seg_length=16000):
+                           normalize_loudness=False,
+                           seg_length=16000,
+                           file_format="flac"):
     feature_description = {
         "audio": tf.io.FixedLenFeature([], tf.string),
         "label": tf.io.VarLenFeature(tf.int64),
         "duration": tf.io.FixedLenFeature([], tf.int64),
     }
     example = tf.io.parse_single_example(example, feature_description)
-    a = tfio.audio.decode_flac(example['audio'], dtype=tf.int16)
+    if file_format == "flac":
+        a = tfio.audio.decode_flac(example['audio'], dtype=tf.int16)
+        a = tf.cast(a, tf.float32) / 32768.
+    elif file_format == "ogg":
+        a = tfio.audio.decode_vorbis(example['audio'])
+    elif file_format == "wav":
+        a = tfio.audio.decode_wav(example['audio'], dtype=tf.int16)
+        a = tf.cast(a, tf.float32) / 32768.
     a = tf.reshape(a, (-1,))
-    a = tf.cast(a, tf.float32) / 32768.
+    if normalize_loudness:
+        a = loudness_normalization(a)
     a = pad_waveform(a, seg_length=seg_length)
     if cropper:
         a = cropper(a)
@@ -60,18 +70,30 @@ def parse_tfrecord_fn_tfio(example,
 
 def parse_tf_record_tfio_contrastive(example, cropper,
                                      label_parser=None,
-                                     normalize_waveform=True,
+                                     normalize_waveform=False,
+                                     normalize_loudness=False,
                                      noise=0.001,
-                                     seg_length=16000):
+                                     seg_length=16000,
+                                     file_format="flac"):
     feature_description = {
         "audio": tf.io.FixedLenFeature([], tf.string),
         "label": tf.io.VarLenFeature(tf.int64),
         "duration": tf.io.FixedLenFeature([], tf.int64),
     }
     example = tf.io.parse_single_example(example, feature_description)
-    a = tfio.audio.decode_flac(example['audio'], dtype=tf.int16)
+    if file_format == "flac":
+        a = tfio.audio.decode_flac(example['audio'], dtype=tf.int16)
+        a = tf.cast(a, tf.float32) / 32768.
+    elif file_format == "ogg":
+        a = tfio.audio.decode_vorbis(example['audio'])
+        # vorbis is already float, and in correct range
+    elif file_format == "wav":
+        a = tfio.audio.decode_wav(example['audio'], dtype=tf.int16)
+        a = tf.cast(a, tf.float32) / 32768.
     a = tf.reshape(a, (-1,))
-    a = tf.cast(a, tf.float32) / 32768.
+    
+    if normalize_loudness:
+        a = loudness_normalization(a)
     a = pad_waveform(a, seg_length=seg_length)
 
     waveform_a = cropper(a)

@@ -4,7 +4,21 @@ Kept separate from core audax (since it's tensorflow based)
 
 Written for audax by / Copyright 2022, Sarthak Yadav
 """
+import math
 import tensorflow as tf
+
+
+def db_to_linear(samples):
+  return 10.0 ** (samples / 20.0)
+
+
+def loudness_normalization(samples: tf.Tensor,
+                           target_db: float = 15.0,
+                           max_gain_db: float = 30.0):
+  """Normalizes the loudness of the input signal."""
+  std = tf.math.reduce_std(samples) + 1e-9
+  gain = tf.minimum(db_to_linear(max_gain_db), db_to_linear(target_db) / std)
+  return gain * samples
 
 
 def pad_waveform(waveform, seg_length=16000):
@@ -30,7 +44,7 @@ def center_crop_signal(audio, slice_length):
     data_length = tf.shape(audio, out_type=tf.dtypes.int64)[0]
     if data_length == slice_length:
         return audio
-    center_offset = data_length // 2
+    center_offset = tf.maximum((data_length // 2) - (slice_length//2), 0)
     slice_indices = tf.range(0, slice_length, dtype=tf.dtypes.int64)
     return tf.gather(audio, slice_indices + center_offset, axis=0)
 

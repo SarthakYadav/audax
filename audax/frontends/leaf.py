@@ -25,6 +25,59 @@ Dtype = Any  # this could be a real type?
 Array = Any
 
 
+def hz_to_leaf_param(freqs_hz, sample_rate=16000):
+  return ((2 * jnp.pi) * freqs_hz)/ sample_rate
+
+
+def simple_min_max_scale(x, minval, maxval):
+    x_std = (x - x.min(axis=0)) / (x.max(axis=0) - x.min(axis=0))
+    output = x_std * (maxval - minval) + minval
+    return output 
+
+
+def leaf_truncated_init(dtype=jnp.float_, kernel_size=401,
+                        min_freq: float=0., max_freq: float=8000.,
+                        sample_rate=16000,):
+    def init(key, shape, dtype=dtype):
+        lower_val = min(0., hz_to_leaf_param(min_freq, sample_rate=sample_rate)) 
+        upper_val = max(math.pi, hz_to_leaf_param(max_freq, sample_rate=sample_rate))
+
+        centers = jax.random.truncated_normal(key, 0, 1., (shape[0],), dtype=dtype)
+        centers = simple_min_max_scale(centers, lower_val, upper_val)
+
+        sigma_lower = 4 * math.sqrt(2 * math.log(2)) / math.pi
+        sigma_upper = kernel_size * math.sqrt(2 * math.log(2)) / math.pi
+        sigmas = jax.random.truncated_normal(key, 0., 1., (shape[0],), dtype=dtype)
+        sigmas = simple_min_max_scale(sigmas, sigma_lower, sigma_upper)
+
+        # sort them
+        centers = jnp.sort(centers)
+        sigmas = jnp.sort(sigmas)[::-1]
+
+        return jnp.stack([centers, sigmas], axis=1)
+    return init
+
+
+def leaf_uniform_init(dtype=jnp.float_, kernel_size=401,
+                        min_freq: float=0., max_freq: float=8000.,
+                        sample_rate=16000,):
+    def init(key, shape, dtype=dtype):
+        lower_val = min(0., hz_to_leaf_param(min_freq, sample_rate=sample_rate)) 
+        upper_val = max(math.pi, hz_to_leaf_param(max_freq, sample_rate=sample_rate))
+
+        centers = jax.random.uniform(key, (shape[0],), dtype=dtype, minval=lower_val, maxval=upper_val)
+        sigma_lower = 4 * math.sqrt(2 * math.log(2)) / math.pi
+        sigma_upper = kernel_size * math.sqrt(2 * math.log(2)) / math.pi
+        sigmas = jax.random.uniform(key, (shape[0],), dtype=dtype, minval=sigma_lower, maxval=sigma_upper)
+        # sort them
+        centers = jnp.sort(centers)
+        sigmas = jnp.sort(sigmas)[::-1]
+
+        return jnp.stack([centers, sigmas], axis=1)
+
+    return init
+
+
 def squared_modulus_activation(inputs):
     """
     Squared Modules Activation function as used in Leaf
@@ -428,6 +481,14 @@ class Leaf(nn.Module):
                 conv_init_func = flax.linen.initializers.lecun_normal()
             elif self.complex_conv_init.lower() == "kaiming_normal":
                 conv_init_func = flax.linen.initializers.kaiming_normal()
+            elif self.complex_conv_init.lower() == "uniform":
+                conv_init_func = leaf_uniform_init(kernel_size=window_size,
+                                                   sample_rate=self.sample_rate,
+                                                   min_freq=self.min_freq, max_freq=self.max_freq)
+            elif self.complex_conv_init.lower() == "truncated_normal":
+                conv_init_func = leaf_truncated_init(kernel_size=window_size,
+                                                   sample_rate=self.sample_rate,
+                                                   min_freq=self.min_freq, max_freq=self.max_freq)
             else:
                 raise ValueError("Unsupported 'str' valued argument {}, should be one of [randn, lecun_normal, kaiming_normal]. Pass a callable instead")
         else:

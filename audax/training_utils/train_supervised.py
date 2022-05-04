@@ -7,7 +7,7 @@ import functools
 import os
 import time
 from typing import Any
-
+import copy
 from absl import logging
 from clu import metric_writers
 from clu import periodic_actions
@@ -187,7 +187,8 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
                 functools.partial(
                     training_utilities.apply_audio_transforms, transforms=tfs, 
                     dtype=training_utilities.get_dtype(config.half_precision),
-                    normalize=config.data.get("normalize_batch", False)
+                    normalize=config.data.get("normalize_batch", False),
+                    add_new_axis=config.model.get("is_2d", True)
                 ), axis_name='batch', devices=devices)
         else:
             p_feature_extract_fn = None
@@ -199,13 +200,18 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
     if p_spec_aug:
         logging.info("Using spec augment")
     num_examples = config.data.tr_samples
-    steps_per_epoch = (num_examples // config.batch_size)
+    if config.get("steps_per_epoch", -1) == -1:
+        steps_per_epoch = (num_examples // config.batch_size)
+    else:
+        steps_per_epoch = config.get("steps_per_epoch")
 
     if config.num_train_steps == -1:
         num_steps = int(steps_per_epoch * config.num_epochs)
+        num_epochs = config.num_epochs
     else:
         num_steps = config.num_train_steps
-
+        num_epochs = config.num_train_steps // steps_per_epoch
+    logging.info("num_steps: {} | num_epochs: {}".format(num_steps, num_epochs))
     if config.steps_per_eval == -1:
         num_validation_examples = config.data.eval_samples
         steps_per_eval = num_validation_examples // config.batch_size
@@ -224,7 +230,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
         drop_rate=config.model.get("fc_drop_rate", 0.))
     print(model)
     learning_rate_fn = training_utilities.create_learning_rate_fn(
-        config, base_learning_rate, steps_per_epoch)
+        config, base_learning_rate, steps_per_epoch, num_epochs)
 
     if config.model.get("pretrained", None):
         state = training_utilities.create_train_state_from_pretrained(rng, config,
@@ -303,7 +309,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict,
                 }
                 summary['steps_per_second'] = config.log_every_steps / (
                         time.time() - train_metrics_last_t)
-                writer.write_scalars(step + 1, summary)
+                writer.write_scalars(step + 1, copy.copy(summary))
                 if wandb_logger:
                     wandb_logger.log(summary, step+1)
                 train_metrics = []
