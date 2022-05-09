@@ -199,7 +199,7 @@ class SincNet(nn.Module):
     n_filters: int = 40
     sample_rate: int = 16000
     window_len: float = 25.
-    window_stride: float = 10.
+    hop_len: float = 10.
     window_size: int = None
     window_stride: int = None
     min_low_hz = 50.
@@ -218,7 +218,7 @@ class SincNet(nn.Module):
         else:
             window_size = self.window_size + 1
         if self.window_stride is None:
-            window_stride = int(self.sample_rate * self.window_stride // 1000)
+            window_stride = int(self.sample_rate * self.hop_len // 1000)
         else:
             window_stride = self.window_stride
 

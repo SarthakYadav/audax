@@ -451,7 +451,9 @@ class Leaf(nn.Module):
     n_filters: int = 40
     sample_rate: int = 16000
     window_len: float = 25.
-    window_stride: float = 10.
+    hop_len: float = 10.
+    window_size: int = None
+    window_stride: int = None
     min_freq: float = 60.
     max_freq: float = 7800.
     complex_conv_init: Optional[Union[Callable, str]] = "default"
@@ -464,8 +466,14 @@ class Leaf(nn.Module):
     precision: Any = None
 
     def setup(self):
-        window_size = int(self.sample_rate * self.window_len // 1000 + 1)
-        window_stride = int(self.sample_rate * self.window_stride // 1000)
+        if self.window_size is None:
+            window_size = int(self.sample_rate * self.window_len // 1000 + 1)
+        else:
+            window_size = self.window_size + 1
+        if self.window_stride is None:
+            window_stride = int(self.sample_rate * self.hop_len // 1000)
+        else:
+            window_stride = self.window_stride
         if type(self.complex_conv_init) == str:
             if self.complex_conv_init.lower() == "default":
                 conv_init_func = partial(gabor_init,
