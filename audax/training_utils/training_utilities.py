@@ -101,18 +101,28 @@ def create_learning_rate_fn(
         steps_per_epoch: int,
         num_epochs: int=None):
     """Create learning rate schedule."""
-    warmup_fn = optax.linear_schedule(
-        init_value=0., end_value=base_learning_rate,
-        transition_steps=config.opt.warmup_epochs * steps_per_epoch)
-    if num_epochs is None:
-        num_epochs = config.num_epochs
-    cosine_epochs = max(num_epochs - config.opt.warmup_epochs, 1)
-    cosine_fn = optax.cosine_decay_schedule(
-        init_value=base_learning_rate,
-        decay_steps=cosine_epochs * steps_per_epoch)
-    schedule_fn = optax.join_schedules(
-        schedules=[warmup_fn, cosine_fn],
-        boundaries=[config.opt.warmup_epochs * steps_per_epoch])
+    if config.opt.schedule == "warmupcosine":
+        logging.info("Using cosine learning rate decay")
+        warmup_fn = optax.linear_schedule(
+            init_value=0., end_value=base_learning_rate,
+            transition_steps=config.opt.warmup_epochs * steps_per_epoch)
+        if num_epochs is None:
+            num_epochs = config.num_epochs
+        cosine_epochs = max(num_epochs - config.opt.warmup_epochs, 1)
+        cosine_fn = optax.cosine_decay_schedule(
+            init_value=base_learning_rate,
+            decay_steps=cosine_epochs * steps_per_epoch)
+        schedule_fn = optax.join_schedules(
+            schedules=[warmup_fn, cosine_fn],
+            boundaries=[config.opt.warmup_epochs * steps_per_epoch])
+    elif config.opt.schedule == "cosine_decay":
+        cosine_epochs = num_epochs
+        cosine_fn = optax.cosine_decay_schedule(
+            init_value=base_learning_rate,
+            decay_steps=cosine_epochs * steps_per_epoch)
+        schedule_fn = cosine_fn
+    else:
+        schedule_fn = base_learning_rate
     return schedule_fn
 
 
@@ -147,10 +157,25 @@ def create_train_state(rng, config: ml_collections.ConfigDict,
         dynamic_scale = None
 
     params, batch_stats, rng_keys = initialize(rng, config.input_shape, model)
-    tx = optax.adamw(
-        learning_rate=learning_rate_fn,
-        weight_decay=config.opt.weight_decay
-    )
+    optimizer_name = config.opt.optimizer.lower()
+    if optimizer_name == "adamw":
+        tx = optax.adamw(
+            learning_rate=learning_rate_fn,
+            weight_decay=config.opt.weight_decay
+        )
+    elif optimizer_name == "lars":
+        tx = optax.lars(
+            learning_rate=learning_rate_fn,
+            weight_decay=config.opt.weight_decay
+        )
+    elif optimizer_name == "sgd":
+        tx = optax.sgd(
+            learning_rate=learning_rate_fn,
+            momentum=config.opt.get("momentum", 0.9),
+            nesterov=config.opt.get("nesterov", False)
+        )
+    else:
+        raise ValueError("optimizer {} not supported. Valid values are [adamw, lars, sgd]")
     state = TrainState_v2.create(
         apply_fn=model.apply,
         params=params,
@@ -215,10 +240,25 @@ def create_train_state_from_pretrained(rng, config: ml_collections.ConfigDict,
     batch_stats = freeze(batch_stats)
 
     # make the train state now
-    tx = optax.adamw(
-        learning_rate=learning_rate_fn,
-        weight_decay=config.opt.weight_decay
-    )
+    optimizer_name = config.opt.optimizer.lower()
+    if optimizer_name == "adamw":
+        tx = optax.adamw(
+            learning_rate=learning_rate_fn,
+            weight_decay=config.opt.weight_decay
+        )
+    elif optimizer_name == "lars":
+        tx = optax.lars(
+            learning_rate=learning_rate_fn,
+            weight_decay=config.opt.weight_decay
+        )
+    elif optimizer_name == "sgd":
+        tx = optax.sgd(
+            learning_rate=learning_rate_fn,
+            momentum=config.opt.get("momentum", 0.9),
+            nesterov=config.opt.get("nesterov", False)
+        )
+    else:
+        raise ValueError("optimizer {} not supported. Valid values are [adamw, lars, sgd]")
     state = TrainState_v2.create(
         apply_fn=model.apply,
         params=trainable_params,

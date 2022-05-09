@@ -200,6 +200,8 @@ class SincNet(nn.Module):
     sample_rate: int = 16000
     window_len: float = 25.
     window_stride: float = 10.
+    window_size: int = None
+    window_stride: int = None
     min_low_hz = 50.
     min_band_hz = 50.
     pooling_param = 0.4
@@ -211,8 +213,15 @@ class SincNet(nn.Module):
     precision: Any = None
 
     def setup(self):
-        window_size = int(self.sample_rate * self.window_len // 1000 + 1)
-        window_stride = int(self.sample_rate * self.window_stride // 1000)
+        if self.window_size is None:
+            window_size = int(self.sample_rate * self.window_len // 1000 + 1)
+        else:
+            window_size = self.window_size + 1
+        if self.window_stride is None:
+            window_stride = int(self.sample_rate * self.window_stride // 1000)
+        else:
+            window_stride = self.window_stride
+
         self.complex_conv = SincConv1D(filters=self.n_filters * 2,
                                        kernel_size=window_size, stride=1,
                                        use_bias=self.use_bias,

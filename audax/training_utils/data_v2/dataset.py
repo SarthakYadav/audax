@@ -61,7 +61,7 @@ def parse_tfrecord_fn_tfio(example,
     if cropper:
         a = cropper(a)
     if normalize_waveform:
-        a = tf.math.l2_normalize(a, epsilon=1e-9)
+        a = (a - tf.reduce_mean(a)) / (tf.math.reduce_std(a) + 1e-8)
     example['audio'] = a
     if label_parser:
         example = label_parser(example)
