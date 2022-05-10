@@ -3,6 +3,7 @@ Helper functions for jax/flax training
 
 Written for audax by / Copyright 2022, Sarthak Yadav
 """
+from gettext import translation
 import os
 import json
 import logging
@@ -121,6 +122,17 @@ def create_learning_rate_fn(
             init_value=base_learning_rate,
             decay_steps=cosine_epochs * steps_per_epoch)
         schedule_fn = cosine_fn
+    elif config.opt.schedule == "exp_decay":
+        warmup_epochs = int(config.opt.get("warmup_epochs", 0))
+        transition_steps = (num_epochs - warmup_epochs) * steps_per_epoch
+        fixed_steps = warmup_epochs * steps_per_epoch
+        schedule_fn = optax.exponential_decay(
+            init_value=base_learning_rate,
+            decay_rate=config.opt.get("decay_rate", 0.1),
+            transition_begin=fixed_steps+1,
+            transition_steps=transition_steps,
+            end_value=config.opt.get("end_value", 1e-7)
+        )
     else:
         schedule_fn = base_learning_rate
     return schedule_fn
