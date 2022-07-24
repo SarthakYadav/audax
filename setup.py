@@ -10,7 +10,7 @@ setuptools.setup(
     description="audio ML for Jax",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/SarthakYadav/audio_data_utils",
+    url="https://github.com/SarthakYadav/audax",
     # package_dir={"": ""},
     packages=[
         "audax",
